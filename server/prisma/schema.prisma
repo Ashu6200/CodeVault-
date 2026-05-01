@@ -1,0 +1,489 @@
+// This is your Prisma schema file (cache break)
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum WorkspaceType {
+  PERSONAL
+  ORGANIZATION
+}
+
+enum DocumentVisibility {
+  PRIVATE
+  WORKSPACE // [NEW] Visible to all workspace members (was missing middle ground)
+  PUBLIC
+}
+
+enum SubscriptionPlan {
+  FREE
+  TEAM
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT // [NEW] Track logouts for security sessions
+  INVITE_SENT
+  INVITE_ACCEPTED // [NEW] Close the invite lifecycle loop
+  INVITE_REVOKED // [NEW]
+  ROLE_CREATED
+  ROLE_UPDATED // [NEW]
+  ROLE_DELETED // [NEW]
+  PERMISSION_CHANGED // [NEW]
+  API_KEY_CREATED // [NEW]
+  API_KEY_REVOKED // [NEW]
+}
+
+// [NEW] For document-level comment threads
+enum CommentStatus {
+  OPEN
+  RESOLVED
+}
+
+// [NEW] For outbound webhook event types
+enum WebhookEvent {
+  DOCUMENT_CREATED
+  DOCUMENT_UPDATED
+  DOCUMENT_DELETED
+  MEMBER_JOINED
+  MEMBER_REMOVED
+  SUBSCRIPTION_CHANGED
+}
+
+// [NEW] Delivery status of a webhook attempt
+enum WebhookDeliveryStatus {
+  SUCCESS
+  FAILED
+  PENDING
+}
+
+// ─────────────────────────────────────────────
+// BETTER-AUTH CORE MODELS
+// ─────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  name          String?
+  image         String?
+  // [NEW] Soft-delete for account deactivation without data loss
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Better-Auth relations
+  accounts Account[]
+  sessions Session[]
+
+  // App relations
+  memberships      Member[]
+  ownedWorkspaces  Workspace[]       @relation("OwnerOfWorkspace")
+  authoredDocs     Document[]        @relation("DocumentAuthor")
+  apiKeys          ApiKey[]
+  sentInvites      Invite[]          @relation("InvitedByUser")
+  acceptedInvites  Invite[]          @relation("AcceptedByUser") // Inverse for Invite.acceptedBy
+  auditLog         AuditLog[]
+  comments         Comment[] // [NEW]
+  notifications    Notification[] // [NEW]
+  documentGrants   DocumentGrant[] // [NEW]
+  resolvedComments Comment[]         @relation("ResolvedByUser") // [NEW]
+  documentVersions DocumentVersion[] // Inverse for DocumentVersion.author
+}
+
+model Account {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerType      String
+  providerId        String
+  providerAccountId String
+  refreshToken      String?
+  accessToken       String?
+  expiresAt         DateTime?
+  tokenType         String?
+  scope             String?
+  idToken           String?
+  sessionState      String?
+
+  @@unique([providerId, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  // [NEW] Detect suspicious logins by comparing countries across sessions
+  country   String?
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([identifier, value])
+}
+
+// ─────────────────────────────────────────────
+// MULTI-TENANCY & RBAC
+// ─────────────────────────────────────────────
+
+model Workspace {
+  id        String        @id @default(cuid())
+  name      String
+  slug      String        @unique
+  type      WorkspaceType @default(ORGANIZATION)
+  logoUrl   String?
+  // [NEW] Structured workspace-level settings (e.g. default visibility, allowed domains)
+  settings  Json?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Owner
+  ownerId String
+  owner   User   @relation("OwnerOfWorkspace", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // Billing
+  stripeCustomerId      String?             @unique
+  stripeSubscriptionId  String?             @unique
+  subscriptionPlan      SubscriptionPlan    @default(FREE)
+  subscriptionStatus    SubscriptionStatus?
+  subscriptionPeriodEnd DateTime?
+  // [NEW] Enforce a hard cap on the number of seats per plan
+  seatLimit             Int?
+
+  // Relations
+  members          Member[]
+  roles            Role[]
+  documents        Document[]
+  invites          Invite[]
+  billingHistory   BillingTransaction[]
+  webhookEndpoints WebhookEndpoint[] // [NEW]
+  notifications    Notification[] // [NEW]
+
+  @@index([slug])
+}
+
+model Role {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  // [NEW] Prevent accidental deletion of system-defined roles (e.g. "Owner", "Admin")
+  isSystem    Boolean   @default(false)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  permissions String[]
+  members     Member[]
+
+  @@unique([workspaceId, name])
+}
+
+model Member {
+  id       String   @id @default(cuid())
+  joinedAt DateTime @default(now())
+  // [NEW] Allow admins to temporarily deactivate a member without removing their history
+  isActive Boolean  @default(true)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
+model Invite {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  // [NEW] Store the target roleId directly as a relation for integrity
+  roleId    String
+  expiresAt DateTime
+
+  acceptedAt   DateTime?
+  acceptedById String?
+  acceptedBy   User?     @relation("AcceptedByUser", fields: [acceptedById], references: [id])
+  // [NEW] Allow explicit revocation before expiry
+  revokedAt    DateTime?
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  invitedById String
+  invitedBy   User   @relation("InvitedByUser", fields: [invitedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([email, workspaceId])
+  @@index([token])
+}
+
+// ─────────────────────────────────────────────
+// CONTENT & ABAC
+// ─────────────────────────────────────────────
+
+model Document {
+  id          String             @id @default(cuid())
+  title       String
+  slug        String             @db.VarChar(255)
+  icon        String?
+  coverImage  String?
+  content     String?            @db.Text
+  visibility  DocumentVisibility @default(PRIVATE)
+  isPublished Boolean            @default(false)
+  order       Float              @default(0)
+  // [NEW] Estimated reading time, pre-computed on save (e.g. in minutes)
+  readingTime Int?
+  // [NEW] Tags for filtering and discovery within a workspace
+  tags        String[]
+
+  // Hierarchy
+  parentId String?
+  parent   Document?  @relation("DocumentTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Document[] @relation("DocumentTree")
+
+  // ABAC
+  authorId String?
+  author   User?   @relation("DocumentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  versions DocumentVersion[]
+  comments Comment[] // [NEW]
+  grants   DocumentGrant[] // [NEW] Per-document ACL overrides
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([workspaceId, parentId, slug])
+  @@index([authorId])
+  @@index([workspaceId, visibility])
+  @@index([parentId])
+  // [NEW] Full-text search index on title and content
+  @@index([workspaceId, deletedAt])
+}
+
+// [NEW] Per-document permission grants (ABAC override layer)
+model DocumentGrant {
+  id          String    @id @default(cuid())
+  permissions String[]
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([userId])
+}
+
+model DocumentVersion {
+  id            String  @id @default(cuid())
+  title         String
+  content       String  @db.Text
+  versionNumber Int
+  changeSummary String?
+
+  createdBy String
+  author    User   @relation(fields: [createdBy], references: [id])
+
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([documentId, versionNumber])
+  @@index([documentId])
+}
+
+// [NEW] Threaded comments on documents
+model Comment {
+  id      String        @id @default(cuid())
+  content String        @db.Text
+  status  CommentStatus @default(OPEN)
+
+  // Threaded replies
+  parentId String?
+  parent   Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentThread")
+
+  // Resolution tracking
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?     @relation("ResolvedByUser", fields: [resolvedById], references: [id])
+
+  selectionRange Json?
+
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([documentId])
+  @@index([authorId])
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id      String    @id @default(cuid())
+  type    String
+  payload Json?
+  isRead  Boolean   @default(false)
+  readAt  DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([workspaceId])
+}
+
+// ─────────────────────────────────────────────
+// OPERATIONS & MONITORING
+// ─────────────────────────────────────────────
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  name      String
+  keyHash   String    @unique
+  keyPrefix String
+  scopes    String[]
+  expiresAt DateTime?
+  lastUsed  DateTime?
+  revokedAt DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id           String      @id @default(cuid())
+  action       AuditAction
+  resourceType String
+  resourceId   String?
+  details      Json?
+  ipAddress    String?
+  userAgent    String?
+
+  actorId String
+  actor   User   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  workspaceId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([actorId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+}
+
+model BillingTransaction {
+  id             String  @id @default(cuid())
+  amount         Int
+  currency       String  @default("usd")
+  description    String?
+  status         String
+  stripeChargeId String? @unique
+  planSnapshot   String?
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WebhookEndpoint {
+  id        String         @id @default(cuid())
+  url       String
+  events    WebhookEvent[]
+  secret    String
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  deliveries WebhookDelivery[]
+
+  @@index([workspaceId])
+}
+
+model WebhookDelivery {
+  id           String                @id @default(cuid())
+  event        WebhookEvent
+  payload      Json
+  status       WebhookDeliveryStatus @default(PENDING)
+  responseCode Int?
+  responseBody String?               @db.Text
+  attemptCount Int                   @default(0)
+  nextRetryAt  DateTime?
+  deliveredAt  DateTime?
+
+  webhookEndpointId String
+  endpoint          WebhookEndpoint @relation(fields: [webhookEndpointId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([webhookEndpointId, status])
+}

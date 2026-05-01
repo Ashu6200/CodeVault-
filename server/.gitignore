@@ -1,0 +1,12 @@
+node_modules
+
+/generated/prisma
+dist
+
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo

@@ -1,0 +1,25 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "D:\\Project\\CodeVault2.0\\server\\logs\\.6a20b8baf08512d1ecf61237fbe8f843424b92fc-audit.json",
+    "files": [
+        {
+            "date": 1777496589310,
+            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\rejections-2026-04-30.log",
+            "hash": "f4ce1e114dfff95274a9bd30e11d57bb47233dab7fe02dd9bad5a50ee68e2f18"
+        },
+        {
+            "date": 1777573945478,
+            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\rejections-2026-05-01.log",
+            "hash": "fb7d25663d5a425990240dc3d6e2067f8bc460b11056db09c927062dbaa72288"
+        },
+        {
+            "date": 1777662442454,
+            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\rejections-2026-05-02.log",
+            "hash": "5b0696a96bf0f336c893958672519ea63acd488a123184bca07b11e60cf9a6a5"
+        }
+    ],
+    "hashType": "sha256"
+}

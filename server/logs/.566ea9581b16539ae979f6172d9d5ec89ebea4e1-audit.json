@@ -6,19 +6,19 @@
     "auditLog": "D:\\Project\\CodeVault2.0\\server\\logs\\.566ea9581b16539ae979f6172d9d5ec89ebea4e1-audit.json",
     "files": [
         {
-            "date": 1777496589292,
-            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\error-2026-04-30.log",
-            "hash": "27e3e47052d3da1eda8a18da2a3747a18b096969b4e59f5d6d842459882f3100"
+            "date": 1778392191031,
+            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\error-2026-05-10.log",
+            "hash": "67f3f5a7f941d0f6b0ebe3485379954d5114645e1ce829fafdb1fef000aab990"
         },
         {
-            "date": 1777573801690,
-            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\error-2026-05-01.log",
-            "hash": "f338dede8d0039da4ce4633ce0747f3a59279284cdd4142eea27b017953bbd57"
+            "date": 1778440246520,
+            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\error-2026-05-11.log",
+            "hash": "1c9a3be09a7be9aba8154e1f00961c4562cf241d27f9db667dcb37432044ab25"
         },
         {
-            "date": 1777662442344,
-            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\error-2026-05-02.log",
-            "hash": "f6002bfed4b78d6776216f98e066fc070dd2721a0518022c9c8cadf40431e8a7"
+            "date": 1780941995485,
+            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\error-2026-06-08.log",
+            "hash": "b6ac6baaecf2a0152a9e95f2874384f0e5df66808162147e08493e8cdbd7109a"
         }
     ],
     "hashType": "sha256"

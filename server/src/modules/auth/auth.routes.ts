@@ -12,12 +12,6 @@ import { rateLimiter } from '@middleware/rateLimiter.middleware';
 const router = Router();
 const controller = new AuthController();
 
-// Better Auth handles: /api/auth/sign-up, /api/auth/sign-in, /api/auth/sign-out, etc.
-// Apply strict rate limiting to auth endpoints
-router.all('/*', rateLimiter({ limit: 10, windowSeconds: 60 }), (req, res) => {
-  return toNodeHandler(auth)(req, res);
-});
-
 // Custom auth endpoints
 router.get('/me', requireAuth, controller.getSession);
 router.post(
@@ -26,5 +20,12 @@ router.post(
   rateLimiter({ limit: 3, windowSeconds: 3600 }),
   controller.deactivateAccount,
 );
+
+// Better Auth handles: /api/auth/sign-up, /api/auth/sign-in, /api/auth/sign-out, etc.
+// Apply strict rate limiting to auth endpoints
+router.all('/*', rateLimiter({ limit: 10, windowSeconds: 60 }), (req, res) => {
+  return toNodeHandler(auth)(req, res);
+});
+
 
 export default router;

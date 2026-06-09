@@ -1,5 +1,5 @@
 import { BaseService } from '@core/base.service';
-import { CommentRepository } from './comment.repository';
+import { prisma } from '@infra/db';
 import { eventBus, EVENTS } from '@infra/events';
 import { getIO } from '@infra/socket';
 import { NotFoundError, ForbiddenError } from '@core/errors';
@@ -9,16 +9,27 @@ import { logger } from '@infra/logger';
 const log = logger.child('CommentService');
 
 export class CommentService extends BaseService {
-  private commentRepo: CommentRepository;
-
   constructor() {
     super();
-    this.commentRepo = new CommentRepository();
   }
 
   async getDocumentComments(documentId: string) {
     try {
-      return await this.commentRepo.findByDocument(documentId);
+      return await prisma.comment.findMany({
+        where: { documentId, parentId: null, deletedAt: null },
+        include: {
+          author: { select: { id: true, name: true, image: true } },
+          resolvedBy: { select: { id: true, name: true } },
+          replies: {
+            where: { deletedAt: null },
+            include: {
+              author: { select: { id: true, name: true, image: true } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to fetch comments');
     }
@@ -26,10 +37,12 @@ export class CommentService extends BaseService {
 
   async createComment(documentId: string, data: CreateCommentInput, authorId: string) {
     try {
-      const comment = await this.commentRepo.create({
-        ...data,
-        documentId,
-        authorId,
+      const comment = await prisma.comment.create({
+        data: {
+          ...(data as any),
+          documentId,
+          authorId,
+        },
       });
 
       // Real-time emit
@@ -47,12 +60,15 @@ export class CommentService extends BaseService {
 
   async updateComment(id: string, data: UpdateCommentInput, userId: string) {
     try {
-      const comment = await this.commentRepo.findById(id);
+      const comment = await prisma.comment.findUnique({ where: { id } });
       if (!comment) throw new NotFoundError('Comment', id);
       if (comment.authorId !== userId)
         throw new ForbiddenError('You can only edit your own comments');
 
-      return await this.commentRepo.update(id, data);
+      return await prisma.comment.update({
+        where: { id },
+        data,
+      });
     } catch (error) {
       this.handleError(error, 'Failed to update comment');
     }
@@ -60,13 +76,16 @@ export class CommentService extends BaseService {
 
   async resolveComment(id: string, userId: string) {
     try {
-      const comment = await this.commentRepo.findById(id);
+      const comment = await prisma.comment.findUnique({ where: { id } });
       if (!comment) throw new NotFoundError('Comment', id);
 
-      const updated = await this.commentRepo.update(id, {
-        status: 'RESOLVED',
-        resolvedAt: new Date(),
-        resolvedById: userId,
+      const updated = await prisma.comment.update({
+        where: { id },
+        data: {
+          status: 'RESOLVED',
+          resolvedAt: new Date(),
+          resolvedById: userId,
+        },
       });
 
       try {
@@ -86,12 +105,16 @@ export class CommentService extends BaseService {
 
   async deleteComment(id: string, userId: string) {
     try {
-      const comment = await this.commentRepo.findById(id);
+      const comment = await prisma.comment.findUnique({ where: { id } });
       if (!comment) throw new NotFoundError('Comment', id);
 
-      return await this.commentRepo.softDelete(id);
+      return await prisma.comment.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to delete comment');
     }
   }
 }
+

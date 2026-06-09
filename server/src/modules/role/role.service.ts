@@ -1,20 +1,21 @@
 import { BaseService } from '@core/base.service';
-import { RoleRepository } from './role.repository';
 import { eventBus, EVENTS } from '@infra/events';
 import { NotFoundError, ForbiddenError, ConflictError } from '@core/errors';
 import { CreateRoleInput, UpdateRoleInput } from './role.schema';
+import { prisma } from '@infra/db';
 
 export class RoleService extends BaseService {
-  private roleRepo: RoleRepository;
-
   constructor() {
     super();
-    this.roleRepo = new RoleRepository();
   }
 
   async listRoles(workspaceId: string) {
     try {
-      return await this.roleRepo.findByWorkspace(workspaceId);
+      return await prisma.role.findMany({
+        where: { workspaceId },
+        include: { _count: { select: { members: true } } },
+        orderBy: { name: 'asc' },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to list roles');
     }
@@ -22,10 +23,14 @@ export class RoleService extends BaseService {
 
   async createRole(workspaceId: string, data: CreateRoleInput, actorId: string) {
     try {
-      const existing = await this.roleRepo.findByNameAndWorkspace(data.name, workspaceId);
+      const existing = await prisma.role.findUnique({
+        where: { workspaceId_name: { workspaceId, name: data.name } },
+      });
       if (existing) throw new ConflictError(`Role '${data.name}' already exists`);
 
-      const role = await this.roleRepo.create({ ...data, workspaceId });
+      const role = await prisma.role.create({
+        data: { ...data, workspaceId },
+      });
       eventBus.emit(EVENTS.ROLE_CREATED, role, actorId, workspaceId);
       return role;
     } catch (error) {
@@ -35,11 +40,14 @@ export class RoleService extends BaseService {
 
   async updateRole(id: string, data: UpdateRoleInput, actorId: string) {
     try {
-      const role = await this.roleRepo.findById(id);
+      const role = await prisma.role.findUnique({ where: { id } });
       if (!role) throw new NotFoundError('Role', id);
       if (role.isSystem && data.name) throw new ForbiddenError('Cannot rename system roles');
 
-      const updated = await this.roleRepo.update(id, data);
+      const updated = await prisma.role.update({
+        where: { id },
+        data,
+      });
       eventBus.emit(EVENTS.ROLE_UPDATED, updated, actorId, role.workspaceId);
       return updated;
     } catch (error) {
@@ -49,11 +57,11 @@ export class RoleService extends BaseService {
 
   async deleteRole(id: string, actorId: string) {
     try {
-      const role = await this.roleRepo.findById(id);
+      const role = await prisma.role.findUnique({ where: { id } });
       if (!role) throw new NotFoundError('Role', id);
       if (role.isSystem) throw new ForbiddenError('Cannot delete system roles');
 
-      await this.roleRepo.delete(id);
+      await prisma.role.delete({ where: { id } });
       eventBus.emit(EVENTS.ROLE_DELETED, { id, name: role.name }, actorId, role.workspaceId);
       return { id, deleted: true };
     } catch (error) {
@@ -61,3 +69,4 @@ export class RoleService extends BaseService {
     }
   }
 }
+

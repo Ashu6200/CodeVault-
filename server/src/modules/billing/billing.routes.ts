@@ -6,13 +6,26 @@ import { resolveWorkspace, requirePermission } from '@middleware/rbac.middleware
 const router = Router({ mergeParams: true });
 const controller = new BillingController();
 
-// Stripe webhook (no auth — verified via signature)
-router.post('/stripe-webhook', controller.stripeWebhook);
-
-// Workspace-scoped billing routes
+// Workspace-scoped billing routes — all require auth
 router.use(requireAuth, resolveWorkspace);
 
 router.get('/subscription', requirePermission('billing:read'), controller.getSubscription);
 router.get('/history', requirePermission('billing:read'), controller.listHistory);
+
+router.post(
+  '/create-subscription',
+  requirePermission('billing:write'),
+  controller.createSubscription,
+);
+router.post(
+  '/verify-payment',
+  requirePermission('billing:write'),
+  controller.verifyPayment,
+);
+router.post(
+  '/cancel-subscription',
+  requirePermission('billing:write'),
+  controller.cancelSubscription,
+);
 
 export default router;

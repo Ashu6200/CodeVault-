@@ -1,5 +1,5 @@
 import { BaseService } from '@core/base.service';
-import { AuditRepository } from './audit.repository';
+import { prisma } from '@infra/db';
 import { eventBus, EVENTS } from '@infra/events';
 import { AuditAction } from '@prisma/client';
 import { ListAuditLogsQuery } from './audit.schema';
@@ -8,23 +8,26 @@ import { logger } from '@infra/logger';
 const log = logger.child('AuditService');
 
 export class AuditService extends BaseService {
-  private auditRepo: AuditRepository;
-
   constructor() {
     super();
-    this.auditRepo = new AuditRepository();
   }
 
   async listLogs(workspaceId: string, query: ListAuditLogsQuery) {
     try {
-      return await this.auditRepo.findByWorkspace(
-        workspaceId,
+      const where: any = { workspaceId };
+      if (query.action) where.action = query.action;
+      if (query.actorId) where.actorId = query.actorId;
+      if (query.resourceType) where.resourceType = query.resourceType;
+      if (query.resourceId) where.resourceId = query.resourceId;
+
+      return await this.paginate(
+        prisma.auditLog,
         { page: query.page, limit: query.limit },
         {
-          action: query.action,
-          actorId: query.actorId,
-          resourceType: query.resourceType,
-          resourceId: query.resourceId,
+          where,
+          include: {
+            actor: { select: { id: true, name: true, email: true } },
+          },
         },
       );
     } catch (error) {
@@ -43,7 +46,7 @@ export class AuditService extends BaseService {
     userAgent?: string;
   }) {
     try {
-      return await this.auditRepo.logAction(data);
+      return await prisma.auditLog.create({ data });
     } catch (error) {
       log.error('Failed to log audit action:', error);
       // Don't throw — audit logging should not break the main flow

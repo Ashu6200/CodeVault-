@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 30
+    },
+    "auditLog": "D:\\New folder\\trash\\CodeVault-\\server\\logs\\.98f6c8a33c58f82003d68e70877065a76128aa88-audit.json",
+    "files": [
+        {
+            "date": 1778218833051,
+            "name": "D:\\New folder\\trash\\CodeVault-\\server\\logs\\error-2026-05-08.log",
+            "hash": "195994dd513a01db7497aed555cf5194b7f8c3756572d9892e389737e5f23560"
+        }
+    ],
+    "hashType": "sha256"
+}

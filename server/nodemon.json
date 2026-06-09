@@ -1,0 +1,6 @@
+{
+  "watch": ["src"],
+  "ext": "ts,json",
+  "delay": "500",
+  "exec": "node scripts/kill-port.js && tsx src/server.ts"
+}

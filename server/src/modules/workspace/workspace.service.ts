@@ -1,9 +1,9 @@
 import { BaseService } from '@core/base.service';
-import { WorkspaceRepository } from './workspace.repository';
 import { eventBus, EVENTS } from '@infra/events';
 import { NotFoundError, ConflictError, ForbiddenError } from '@core/errors';
 import { logger } from '@infra/logger';
 import { CreateWorkspaceInput, UpdateWorkspaceInput } from './workspace.schema';
+import { prisma } from '@infra/db';
 
 // ─────────────────────────────────────────────
 // Workspace Service
@@ -12,11 +12,8 @@ import { CreateWorkspaceInput, UpdateWorkspaceInput } from './workspace.schema';
 const log = logger.child('WorkspaceService');
 
 export class WorkspaceService extends BaseService {
-  private workspaceRepo: WorkspaceRepository;
-
   constructor() {
     super();
-    this.workspaceRepo = new WorkspaceRepository();
   }
 
   /**
@@ -25,14 +22,101 @@ export class WorkspaceService extends BaseService {
   async createWorkspace(data: CreateWorkspaceInput, ownerId: string) {
     try {
       // Check slug uniqueness
-      const existing = await this.workspaceRepo.findBySlug(data.slug);
+      const existing = await prisma.workspace.findUnique({ where: { slug: data.slug } });
       if (existing) {
         throw new ConflictError(`Workspace slug '${data.slug}' is already taken`);
       }
 
-      const workspace = await this.workspaceRepo.createWithDefaults({
-        ...data,
-        ownerId,
+      const workspace = await prisma.$transaction(async (tx) => {
+        // 1. Create workspace
+        const ws = await tx.workspace.create({
+          data: {
+            name: data.name,
+            slug: data.slug,
+            type: data.type as any,
+            logoUrl: data.logoUrl,
+            settings: data.settings as any,
+            ownerId,
+          },
+        });
+
+        // 2. Create default roles
+        const ownerRole = await tx.role.create({
+          data: {
+            name: 'Owner',
+            description: 'Full workspace access',
+            isSystem: true,
+            workspaceId: ws.id,
+            permissions: ['*'], // Wildcard — full access
+          },
+        });
+
+        await tx.role.create({
+          data: {
+            name: 'Admin',
+            description: 'Administrative access',
+            isSystem: true,
+            workspaceId: ws.id,
+            permissions: [
+              'workspace:update',
+              'member:manage',
+              'role:manage',
+              'invite:manage',
+              'doc:create',
+              'doc:read',
+              'doc:update',
+              'doc:delete',
+              'comment:create',
+              'comment:read',
+              'comment:update',
+              'comment:delete',
+              'comment:resolve',
+              'webhook:manage',
+              'apikey:manage',
+              'audit:read',
+              'billing:read',
+            ],
+          },
+        });
+
+        await tx.role.create({
+          data: {
+            name: 'Member',
+            description: 'Standard member access',
+            isSystem: true,
+            workspaceId: ws.id,
+            permissions: [
+              'doc:create',
+              'doc:read',
+              'doc:update',
+              'comment:create',
+              'comment:read',
+              'comment:update',
+              'member:read',
+            ],
+          },
+        });
+
+        await tx.role.create({
+          data: {
+            name: 'Guest',
+            description: 'Read-only access',
+            isSystem: true,
+            workspaceId: ws.id,
+            permissions: ['doc:read', 'comment:read', 'member:read'],
+          },
+        });
+
+        // 3. Add owner as member with Owner role
+        await tx.member.create({
+          data: {
+            userId: ownerId,
+            workspaceId: ws.id,
+            roleId: ownerRole.id,
+          },
+        });
+
+        return ws;
       });
 
       // Emit domain event
@@ -50,7 +134,17 @@ export class WorkspaceService extends BaseService {
    */
   async getWorkspaceById(id: string) {
     try {
-      const workspace = await this.workspaceRepo.findByIdWithDetails(id);
+      const workspace = await prisma.workspace.findUnique({
+        where: { id },
+        include: {
+          owner: {
+            select: { id: true, name: true, email: true, image: true },
+          },
+          _count: {
+            select: { members: true, documents: true },
+          },
+        },
+      });
       if (!workspace) {
         throw new NotFoundError('Workspace', id);
       }
@@ -65,7 +159,7 @@ export class WorkspaceService extends BaseService {
    */
   async getWorkspaceBySlug(slug: string) {
     try {
-      const workspace = await this.workspaceRepo.findBySlug(slug);
+      const workspace = await prisma.workspace.findUnique({ where: { slug } });
       if (!workspace) {
         throw new NotFoundError('Workspace');
       }
@@ -80,7 +174,14 @@ export class WorkspaceService extends BaseService {
    */
   async getUserWorkspaces(userId: string) {
     try {
-      return await this.workspaceRepo.findUserWorkspaces(userId);
+      const members = await prisma.member.findMany({
+        where: { userId, isActive: true },
+        include: {
+          workspace: true,
+        },
+        orderBy: { joinedAt: 'desc' },
+      });
+      return members.map((m) => m.workspace);
     } catch (error) {
       this.handleError(error, 'Failed to fetch user workspaces');
     }
@@ -93,13 +194,16 @@ export class WorkspaceService extends BaseService {
     try {
       // If updating slug, check uniqueness
       if (data.slug) {
-        const existing = await this.workspaceRepo.findBySlug(data.slug);
+        const existing = await prisma.workspace.findUnique({ where: { slug: data.slug } });
         if (existing && existing.id !== id) {
           throw new ConflictError(`Workspace slug '${data.slug}' is already taken`);
         }
       }
 
-      const workspace = await this.workspaceRepo.update(id, data);
+      const workspace = await prisma.workspace.update({
+        where: { id },
+        data: data as any,
+      });
 
       eventBus.emit(EVENTS.WORKSPACE_UPDATED, workspace, actorId, workspace.id);
       log.info(`Workspace updated: ${workspace.id}`);
@@ -115,7 +219,7 @@ export class WorkspaceService extends BaseService {
    */
   async deleteWorkspace(id: string, actorId: string) {
     try {
-      const workspace = await this.workspaceRepo.findById(id);
+      const workspace = await prisma.workspace.findUnique({ where: { id } });
       if (!workspace) {
         throw new NotFoundError('Workspace', id);
       }
@@ -124,7 +228,7 @@ export class WorkspaceService extends BaseService {
         throw new ForbiddenError('Only the workspace owner can delete it');
       }
 
-      await this.workspaceRepo.delete(id);
+      await prisma.workspace.delete({ where: { id } });
 
       eventBus.emit(EVENTS.WORKSPACE_DELETED, { id, name: workspace.name }, actorId);
       log.info(`Workspace deleted: ${id}`);
@@ -140,15 +244,18 @@ export class WorkspaceService extends BaseService {
    */
   async checkSeatLimit(workspaceId: string): Promise<boolean> {
     try {
-      const workspace = await this.workspaceRepo.findById(workspaceId);
+      const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
       if (!workspace || !workspace.seatLimit) {
         return true; // No limit set
       }
 
-      const memberCount = await this.workspaceRepo.countMembers(workspaceId);
+      const memberCount = await prisma.member.count({
+        where: { workspaceId, isActive: true },
+      });
       return memberCount < workspace.seatLimit;
     } catch (error) {
       this.handleError(error, 'Failed to check seat limit');
     }
   }
 }
+

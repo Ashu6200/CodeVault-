@@ -6,12 +6,30 @@ import { AppError } from '@core/errors';
  * Blocks requests containing '../', '..\\', etc.
  */
 export const pathTraversalGuard = (req: Request, _res: Response, next: NextFunction) => {
-  const url = decodeURIComponent(req.url);
-  const pathTraversalPattern = /(\.\.\/|\.\.\\)/;
+  let decodedUrl = req.url;
+  let previousUrl: string;
 
-  if (pathTraversalPattern.test(url) || pathTraversalPattern.test(JSON.stringify(req.body))) {
+  // Decode iteratively until stable to prevent double-encoding bypasses
+  do {
+    previousUrl = decodedUrl;
+    try {
+      decodedUrl = decodeURIComponent(decodedUrl);
+    } catch {
+      break;
+    }
+  } while (decodedUrl !== previousUrl);
+
+  const pathTraversalPattern = /(\.\.\/|\.\.\\|%2e%2e%2f|%2e%2e%5c)/i;
+
+  const isMalicious =
+    pathTraversalPattern.test(req.url) ||
+    pathTraversalPattern.test(decodedUrl) ||
+    pathTraversalPattern.test(JSON.stringify(req.body));
+
+  if (isMalicious) {
     return next(new AppError('Malicious path detected', 400, 'SECURITY_BLOCK'));
   }
+
 
   next();
 };

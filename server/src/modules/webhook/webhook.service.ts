@@ -1,25 +1,26 @@
 import { BaseService } from '@core/base.service';
-import { WebhookRepository } from './webhook.repository';
 import { webhookQueue } from '@infra/queue';
 import { NotFoundError } from '@core/errors';
 import { CreateWebhookInput, UpdateWebhookInput } from './webhook.schema';
 import { WebhookEvent } from '@prisma/client';
 import crypto from 'crypto';
 import { logger } from '@infra/logger';
+import { prisma } from '@infra/db';
 
 const log = logger.child('WebhookService');
 
 export class WebhookService extends BaseService {
-  private webhookRepo: WebhookRepository;
-
   constructor() {
     super();
-    this.webhookRepo = new WebhookRepository();
   }
 
   async listEndpoints(workspaceId: string) {
     try {
-      return await this.webhookRepo.findByWorkspace(workspaceId);
+      return await prisma.webhookEndpoint.findMany({
+        where: { workspaceId },
+        include: { _count: { select: { deliveries: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to list webhooks');
     }
@@ -28,10 +29,12 @@ export class WebhookService extends BaseService {
   async createEndpoint(workspaceId: string, data: CreateWebhookInput) {
     try {
       const secret = crypto.randomBytes(32).toString('hex');
-      return await this.webhookRepo.create({
-        ...data,
-        workspaceId,
-        secret,
+      return await prisma.webhookEndpoint.create({
+        data: {
+          ...data,
+          workspaceId,
+          secret,
+        },
       });
     } catch (error) {
       this.handleError(error, 'Failed to create webhook');
@@ -40,9 +43,12 @@ export class WebhookService extends BaseService {
 
   async updateEndpoint(id: string, data: UpdateWebhookInput) {
     try {
-      const endpoint = await this.webhookRepo.findById(id);
+      const endpoint = await prisma.webhookEndpoint.findUnique({ where: { id } });
       if (!endpoint) throw new NotFoundError('Webhook endpoint', id);
-      return await this.webhookRepo.update(id, data);
+      return await prisma.webhookEndpoint.update({
+        where: { id },
+        data,
+      });
     } catch (error) {
       this.handleError(error, 'Failed to update webhook');
     }
@@ -50,9 +56,9 @@ export class WebhookService extends BaseService {
 
   async deleteEndpoint(id: string) {
     try {
-      const endpoint = await this.webhookRepo.findById(id);
+      const endpoint = await prisma.webhookEndpoint.findUnique({ where: { id } });
       if (!endpoint) throw new NotFoundError('Webhook endpoint', id);
-      await this.webhookRepo.delete(id);
+      await prisma.webhookEndpoint.delete({ where: { id } });
       return { id, deleted: true };
     } catch (error) {
       this.handleError(error, 'Failed to delete webhook');
@@ -61,7 +67,11 @@ export class WebhookService extends BaseService {
 
   async getDeliveries(endpointId: string) {
     try {
-      return await this.webhookRepo.getDeliveries(endpointId);
+      return await prisma.webhookDelivery.findMany({
+        where: { webhookEndpointId: endpointId },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
     } catch (error) {
       this.handleError(error, 'Failed to get deliveries');
     }
@@ -73,14 +83,22 @@ export class WebhookService extends BaseService {
    */
   async triggerEvent(workspaceId: string, event: WebhookEvent, payload: any) {
     try {
-      const endpoints = await this.webhookRepo.findActiveByEvent(workspaceId, event);
+      const endpoints = await prisma.webhookEndpoint.findMany({
+        where: {
+          workspaceId,
+          isActive: true,
+          events: { has: event },
+        },
+      });
 
       for (const endpoint of endpoints) {
         // Create delivery record
-        const delivery = await this.webhookRepo.createDelivery({
-          event,
-          payload,
-          webhookEndpointId: endpoint.id,
+        const delivery = await prisma.webhookDelivery.create({
+          data: {
+            event,
+            payload,
+            webhookEndpointId: endpoint.id,
+          },
         });
 
         // Queue delivery job
@@ -102,3 +120,4 @@ export class WebhookService extends BaseService {
     }
   }
 }
+

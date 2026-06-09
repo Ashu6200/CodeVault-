@@ -10,9 +10,9 @@ export function Navbar() {
     <motion.header 
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      className="fixed top-0 left-0 right-0 z-50 flex h-16 items-center border-b border-border/20 bg-background/30 backdrop-blur-xl px-4 md:px-6"
+      className="sticky w-full top-0 z-50 flex h-16 items-center border-b border-border/20 bg-background/30 backdrop-blur-xl px-4 md:px-6"
     >
-      <div className="container flex items-center justify-between">
+      <div className=" flex items-center justify-between w-full">
         <Link href="/" className="flex items-center gap-2.5 font-bold text-base tracking-tight">
           <div className="h-7 w-7 rounded-lg bg-primary/90 flex items-center justify-center text-primary-foreground text-[12px] shadow-lg shadow-primary/20">
             CV
@@ -58,7 +58,7 @@ export function Navbar() {
 export function Footer() {
   return (
     <footer className="border-t border-border/50 bg-muted/30 py-20">
-      <div className="container px-4 md:px-6">
+      <div className="px-6">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12 mb-16">
           <div className="col-span-2 lg:col-span-2">
             <Link href="/" className="flex items-center gap-2.5 font-bold text-xl tracking-tight mb-6">

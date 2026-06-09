@@ -1,3 +1,4 @@
+import { logger } from '@infra/logger';
 import dotenv from 'dotenv';
 import { z } from 'zod';
 
@@ -25,9 +26,12 @@ const configSchema = z.object({
   // CORS
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
 
-  // Stripe
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  // Razorpay
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  RAZORPAY_PLAN_ID_TEAM: z.string().optional(),
+  RAZORPAY_PLAN_ID_ENTERPRISE: z.string().optional(),
 
   // Security
   RATE_LIMIT_BYPASS_IPS: z.string().optional(),
@@ -39,13 +43,9 @@ const configSchema = z.object({
 const parsed = configSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  console.error('❌ Invalid environment variables:');
-  console.error(parsed.error.flatten().fieldErrors);
+  logger.error('❌ Invalid environment variables:');
+  logger.error(JSON.stringify(parsed.error.flatten().fieldErrors, null, 2));
   process.exit(1);
 }
-
-console.log('DEBUG: Environment variables validated');
-console.log('DEBUG: PORT:', parsed.data.PORT);
-console.log('DEBUG: DATABASE_URL:', parsed.data.DATABASE_URL.replace(/:[^:@]+@/, ':***@'));
 
 export const config = parsed.data;

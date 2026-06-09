@@ -1,21 +1,31 @@
 import { BaseService } from '@core/base.service';
-import { ApiKeyRepository } from './apiKey.repository';
+import { prisma } from '@infra/db';
 import { eventBus, EVENTS } from '@infra/events';
 import { NotFoundError } from '@core/errors';
 import { CreateApiKeyInput } from './apiKey.schema';
 import crypto from 'crypto';
 
 export class ApiKeyService extends BaseService {
-  private apiKeyRepo: ApiKeyRepository;
-
   constructor() {
     super();
-    this.apiKeyRepo = new ApiKeyRepository();
   }
 
   async listKeys(userId: string) {
     try {
-      return await this.apiKeyRepo.findByUser(userId);
+      return await prisma.apiKey.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          name: true,
+          keyPrefix: true,
+          scopes: true,
+          expiresAt: true,
+          lastUsed: true,
+          revokedAt: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to list API keys');
     }
@@ -35,13 +45,15 @@ export class ApiKeyService extends BaseService {
         ? new Date(Date.now() + data.expiresInDays * 24 * 60 * 60 * 1000)
         : undefined;
 
-      const apiKey = await this.apiKeyRepo.create({
-        name: data.name,
-        keyHash,
-        keyPrefix,
-        scopes: data.scopes,
-        expiresAt,
-        userId,
+      const apiKey = await prisma.apiKey.create({
+        data: {
+          name: data.name,
+          keyHash,
+          keyPrefix,
+          scopes: data.scopes,
+          expiresAt,
+          userId,
+        },
       });
 
       eventBus.emit(EVENTS.API_KEY_CREATED, { keyId: apiKey.id, name: data.name }, userId);
@@ -62,10 +74,13 @@ export class ApiKeyService extends BaseService {
 
   async revokeKey(id: string, userId: string) {
     try {
-      const key = await this.apiKeyRepo.findById(id);
+      const key = await prisma.apiKey.findUnique({ where: { id } });
       if (!key || key.userId !== userId) throw new NotFoundError('API key', id);
 
-      const updated = await this.apiKeyRepo.update(id, { revokedAt: new Date() });
+      const updated = await prisma.apiKey.update({
+        where: { id },
+        data: { revokedAt: new Date() },
+      });
       eventBus.emit(EVENTS.API_KEY_REVOKED, { keyId: id }, userId);
       return updated;
     } catch (error) {
@@ -73,3 +88,4 @@ export class ApiKeyService extends BaseService {
     }
   }
 }
+

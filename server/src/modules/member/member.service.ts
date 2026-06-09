@@ -1,21 +1,24 @@
 import { BaseService } from '@core/base.service';
-import { MemberRepository } from './member.repository';
 import { eventBus, EVENTS } from '@infra/events';
-import { NotFoundError, ConflictError, ForbiddenError } from '@core/errors';
+import { NotFoundError, ForbiddenError } from '@core/errors';
 import { AddMemberInput, UpdateMemberInput } from './member.schema';
 import { prisma } from '@infra/db';
 
 export class MemberService extends BaseService {
-  private memberRepo: MemberRepository;
-
   constructor() {
     super();
-    this.memberRepo = new MemberRepository();
   }
 
   async listMembers(workspaceId: string) {
     try {
-      return await this.memberRepo.findByWorkspace(workspaceId);
+      return await prisma.member.findMany({
+        where: { workspaceId },
+        include: {
+          user: { select: { id: true, name: true, email: true, image: true } },
+          role: { select: { id: true, name: true } },
+        },
+        orderBy: { joinedAt: 'asc' },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to list members');
     }
@@ -26,16 +29,20 @@ export class MemberService extends BaseService {
       // Check seat limit
       const workspace = await prisma.workspace.findUnique({ where: { id: workspaceId } });
       if (workspace?.seatLimit) {
-        const count = await this.memberRepo.count({ workspaceId, isActive: true });
+        const count = await prisma.member.count({
+          where: { workspaceId, isActive: true },
+        });
         if (count >= workspace.seatLimit) {
           throw new ForbiddenError('Workspace seat limit reached');
         }
       }
 
-      const member = await this.memberRepo.create({
-        userId: data.userId,
-        workspaceId,
-        roleId: data.roleId,
+      const member = await prisma.member.create({
+        data: {
+          userId: data.userId,
+          workspaceId,
+          roleId: data.roleId,
+        },
       });
 
       eventBus.emit(
@@ -52,9 +59,12 @@ export class MemberService extends BaseService {
 
   async updateMember(id: string, data: UpdateMemberInput, actorId: string) {
     try {
-      const member = await this.memberRepo.findById(id);
+      const member = await prisma.member.findUnique({ where: { id } });
       if (!member) throw new NotFoundError('Member', id);
-      return await this.memberRepo.update(id, data);
+      return await prisma.member.update({
+        where: { id },
+        data,
+      });
     } catch (error) {
       this.handleError(error, 'Failed to update member');
     }
@@ -62,10 +72,10 @@ export class MemberService extends BaseService {
 
   async removeMember(id: string, actorId: string) {
     try {
-      const member = await this.memberRepo.findById(id);
+      const member = await prisma.member.findUnique({ where: { id } });
       if (!member) throw new NotFoundError('Member', id);
 
-      await this.memberRepo.delete(id);
+      await prisma.member.delete({ where: { id } });
       eventBus.emit(
         EVENTS.MEMBER_REMOVED,
         { memberId: id, userId: member.userId },
@@ -78,3 +88,4 @@ export class MemberService extends BaseService {
     }
   }
 }
+

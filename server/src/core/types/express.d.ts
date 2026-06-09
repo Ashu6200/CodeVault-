@@ -36,7 +36,10 @@ declare module 'express-serve-static-core' {
       roleId: string;
       isActive: boolean;
     };
+    /** Unique request ID for tracing */
+    id?: string;
   }
+
 
   // Override Express 5 ParamsDictionary to use string values only
   interface ParamsDictionary {

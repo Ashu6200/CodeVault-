@@ -176,13 +176,13 @@ model Workspace {
   owner   User   @relation("OwnerOfWorkspace", fields: [ownerId], references: [id], onDelete: Cascade)
 
   // Billing
-  stripeCustomerId      String?             @unique
-  stripeSubscriptionId  String?             @unique
-  subscriptionPlan      SubscriptionPlan    @default(FREE)
-  subscriptionStatus    SubscriptionStatus?
-  subscriptionPeriodEnd DateTime?
+  razorpayCustomerId     String?             @unique
+  razorpaySubscriptionId String?             @unique
+  subscriptionPlan       SubscriptionPlan    @default(FREE)
+  subscriptionStatus     SubscriptionStatus?
+  subscriptionPeriodEnd  DateTime?
   // [NEW] Enforce a hard cap on the number of seats per plan
-  seatLimit             Int?
+  seatLimit              Int?
 
   // Relations
   members          Member[]
@@ -437,13 +437,13 @@ model AuditLog {
 }
 
 model BillingTransaction {
-  id             String  @id @default(cuid())
-  amount         Int
-  currency       String  @default("usd")
-  description    String?
-  status         String
-  stripeChargeId String? @unique
-  planSnapshot   String?
+  id                String  @id @default(cuid())
+  amount            Int
+  currency          String  @default("inr")
+  description       String?
+  status            String
+  razorpayPaymentId String? @unique
+  planSnapshot      String?
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

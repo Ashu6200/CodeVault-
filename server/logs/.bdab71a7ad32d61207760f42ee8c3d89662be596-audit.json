@@ -6,19 +6,14 @@
     "auditLog": "D:\\Project\\CodeVault2.0\\server\\logs\\.bdab71a7ad32d61207760f42ee8c3d89662be596-audit.json",
     "files": [
         {
-            "date": 1777496589306,
-            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\exceptions-2026-04-30.log",
-            "hash": "29d19cedfa3950a85bef05ced4ca73f58a5fae58ba3d16d573e9ebc3cb15e22b"
+            "date": 1778392191114,
+            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\exceptions-2026-05-10.log",
+            "hash": "4656c42f8482bcfaca61256de3997ff822f148fc33875026627e0b17c14baa17"
         },
         {
-            "date": 1777573945477,
-            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\exceptions-2026-05-01.log",
-            "hash": "8bafe0876583e95639a32bf91b932c8402142d706a32faf4a52175d35f425d29"
-        },
-        {
-            "date": 1777662442408,
-            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\exceptions-2026-05-02.log",
-            "hash": "735ca39cf87d830e6909a3c54e5c6508a742b2b8b75c72ff5981d3f63d3af855"
+            "date": 1780941995639,
+            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\exceptions-2026-06-08.log",
+            "hash": "6a862a8d96c3621738012c55167a5488c88a1ec7a67f3190cb43dc074dd66562"
         }
     ],
     "hashType": "sha256"

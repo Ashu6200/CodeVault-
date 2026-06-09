@@ -10,7 +10,7 @@ import { ArrowRight } from 'lucide-react';
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen bg-transparent selection:bg-primary/10 selection:text-primary">
+    <div className="flex flex-col min-h-screen bg-transparent selection:bg-primary/10 selection:text-primary relative">
       <Navbar />
       <main className="flex-1">
         <Hero />
@@ -21,7 +21,7 @@ export default function Home() {
 
         {/* CTA Section */}
         <section className="py-40 relative overflow-hidden">
-          <div className="container px-4 md:px-6 text-center relative z-10">
+          <div className=" px-4 md:px-6 text-center relative z-10">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               whileInView={{ opacity: 1, scale: 1 }}

@@ -1,5 +1,5 @@
 import { BaseService } from '@core/base.service';
-import { DocumentRepository } from './document.repository';
+import { prisma } from '@infra/db';
 import { redis } from '@infra/redis';
 import { eventBus, EVENTS } from '@infra/events';
 import { getDocumentNs } from '@infra/socket';
@@ -15,11 +15,8 @@ const log = logger.child('DocumentService');
 const CACHE_TTL = 3600; // 1 hour
 
 export class DocumentService extends BaseService {
-  private documentRepo: DocumentRepository;
-
   constructor() {
     super();
-    this.documentRepo = new DocumentRepository();
   }
 
   /**
@@ -34,7 +31,18 @@ export class DocumentService extends BaseService {
         return JSON.parse(cached);
       }
 
-      const document = await this.documentRepo.findByIdWithDetails(id);
+      const document = await prisma.document.findFirst({
+        where: { id, deletedAt: null },
+        include: {
+          author: {
+            select: { id: true, name: true, email: true, image: true },
+          },
+          _count: {
+            select: { versions: true, comments: true, children: true },
+          },
+        },
+      });
+
       if (!document) {
         throw new NotFoundError('Document', id);
       }
@@ -56,20 +64,24 @@ export class DocumentService extends BaseService {
       const words = data.content ? data.content.split(/\s+/).length : 0;
       const readingTime = Math.max(1, Math.ceil(words / 200));
 
-      const document = await this.documentRepo.create({
-        ...data,
-        authorId,
-        readingTime,
+      const document = await prisma.document.create({
+        data: {
+          ...data,
+          authorId,
+          readingTime,
+        },
       });
 
       // Create initial version
-      await this.documentRepo.createVersion({
-        documentId: document.id,
-        title: document.title,
-        content: document.content || '',
-        createdBy: authorId,
-        versionNumber: 1,
-        changeSummary: 'Initial creation',
+      await prisma.documentVersion.create({
+        data: {
+          documentId: document.id,
+          title: document.title,
+          content: document.content || '',
+          createdBy: authorId,
+          versionNumber: 1,
+          changeSummary: 'Initial creation',
+        },
       });
 
       // Emit domain event
@@ -106,18 +118,29 @@ export class DocumentService extends BaseService {
         (updateData as any).readingTime = Math.max(1, Math.ceil(words / 200));
       }
 
-      const document = await this.documentRepo.update(id, updateData);
+      const document = await prisma.document.update({
+        where: { id },
+        data: updateData,
+      });
 
       // Create new version if content or title changed
       if (updateData.content || updateData.title) {
-        const latestVersion = await this.documentRepo.getLatestVersionNumber(id);
-        await this.documentRepo.createVersion({
-          documentId: id,
-          title: document.title,
-          content: document.content || '',
-          createdBy: userId,
-          versionNumber: latestVersion + 1,
-          changeSummary,
+        const version = await prisma.documentVersion.findFirst({
+          where: { documentId: id },
+          orderBy: { versionNumber: 'desc' },
+          select: { versionNumber: true },
+        });
+        const latestVersion = version ? version.versionNumber : 0;
+
+        await prisma.documentVersion.create({
+          data: {
+            documentId: id,
+            title: document.title,
+            content: document.content || '',
+            createdBy: userId,
+            versionNumber: latestVersion + 1,
+            changeSummary,
+          },
         });
       }
 
@@ -133,7 +156,9 @@ export class DocumentService extends BaseService {
           updatedBy: userId,
           updatedAt: document.updatedAt,
         });
-      } catch {}
+      } catch (error) {
+        log.warn(`Failed to emit document:update event for ${id}:`, error);
+      }
 
       // Emit domain event
       eventBus.emit(
@@ -161,12 +186,17 @@ export class DocumentService extends BaseService {
    */
   async deleteDocument(id: string, userId: string) {
     try {
-      const document = await this.documentRepo.findByIdActive(id);
+      const document = await prisma.document.findFirst({
+        where: { id, deletedAt: null },
+      });
       if (!document) {
         throw new NotFoundError('Document', id);
       }
 
-      const result = await this.documentRepo.softDelete(id);
+      const result = await prisma.document.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
 
       // Invalidate cache
       await redis.del(`doc:${id}`);
@@ -175,7 +205,9 @@ export class DocumentService extends BaseService {
       try {
         const docNs = getDocumentNs();
         docNs.to(`document:${id}`).emit('document:deleted', { id });
-      } catch {}
+      } catch (error) {
+        log.warn(`Failed to emit document:deleted event for ${id}:`, error);
+      }
 
       // Emit domain event
       eventBus.emit(
@@ -202,7 +234,26 @@ export class DocumentService extends BaseService {
    */
   async getDocumentTree(workspaceId: string) {
     try {
-      return await this.documentRepo.getDocumentTree(workspaceId);
+      return await prisma.document.findMany({
+        where: {
+          workspaceId,
+          parentId: null,
+          deletedAt: null,
+        },
+        include: {
+          children: {
+            where: { deletedAt: null },
+            include: {
+              children: {
+                where: { deletedAt: null },
+                orderBy: { order: 'asc' },
+              },
+            },
+            orderBy: { order: 'asc' },
+          },
+        },
+        orderBy: { order: 'asc' },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to fetch document tree');
     }
@@ -213,8 +264,28 @@ export class DocumentService extends BaseService {
    */
   async listDocuments(workspaceId: string, query: ListDocumentsQuery) {
     try {
-      return await this.documentRepo.findDocuments(
+      const where: any = {
         workspaceId,
+        deletedAt: null,
+      };
+
+      if (query.visibility) {
+        where.visibility = query.visibility as any;
+      }
+
+      if (query.search) {
+        where.OR = [
+          { title: { contains: query.search, mode: 'insensitive' } },
+          { content: { contains: query.search, mode: 'insensitive' } },
+        ];
+      }
+
+      if (query.tag) {
+        where.tags = { has: query.tag };
+      }
+
+      return await this.paginate(
+        prisma.document,
         {
           page: query.page,
           limit: query.limit,
@@ -222,9 +293,12 @@ export class DocumentService extends BaseService {
           sortOrder: query.sortOrder,
         },
         {
-          visibility: query.visibility as any,
-          search: query.search,
-          tag: query.tag,
+          where,
+          include: {
+            author: {
+              select: { id: true, name: true, image: true },
+            },
+          },
         },
       );
     } catch (error) {
@@ -237,11 +311,21 @@ export class DocumentService extends BaseService {
    */
   async getVersionHistory(documentId: string) {
     try {
-      const document = await this.documentRepo.findByIdActive(documentId);
+      const document = await prisma.document.findFirst({
+        where: { id: documentId, deletedAt: null },
+      });
       if (!document) {
         throw new NotFoundError('Document', documentId);
       }
-      return await this.documentRepo.getVersions(documentId);
+      return await prisma.documentVersion.findMany({
+        where: { documentId },
+        include: {
+          author: {
+            select: { id: true, name: true, image: true },
+          },
+        },
+        orderBy: { versionNumber: 'desc' },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to fetch version history');
     }
@@ -257,16 +341,30 @@ export class DocumentService extends BaseService {
     expiresAt?: Date | null,
   ) {
     try {
-      const document = await this.documentRepo.findByIdActive(documentId);
+      const document = await prisma.document.findFirst({
+        where: { id: documentId, deletedAt: null },
+      });
       if (!document) {
         throw new NotFoundError('Document', documentId);
       }
 
-      return await this.documentRepo.createGrant({
-        documentId,
-        userId,
-        permissions,
-        expiresAt,
+      return await prisma.documentGrant.upsert({
+        where: {
+          documentId_userId: {
+            documentId,
+            userId,
+          },
+        },
+        create: {
+          documentId,
+          userId,
+          permissions,
+          expiresAt,
+        },
+        update: {
+          permissions,
+          expiresAt,
+        },
       });
     } catch (error) {
       this.handleError(error, 'Failed to grant document access');
@@ -278,7 +376,11 @@ export class DocumentService extends BaseService {
    */
   async revokeAccess(documentId: string, userId: string) {
     try {
-      return await this.documentRepo.removeGrant(documentId, userId);
+      return await prisma.documentGrant.delete({
+        where: {
+          documentId_userId: { documentId, userId },
+        },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to revoke document access');
     }
@@ -289,9 +391,17 @@ export class DocumentService extends BaseService {
    */
   async getDocumentGrants(documentId: string) {
     try {
-      return await this.documentRepo.getGrants(documentId);
+      return await prisma.documentGrant.findMany({
+        where: { documentId },
+        include: {
+          user: {
+            select: { id: true, name: true, email: true, image: true },
+          },
+        },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to fetch document grants');
     }
   }
 }
+

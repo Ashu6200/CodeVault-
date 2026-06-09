@@ -1,23 +1,63 @@
+import crypto from 'crypto';
 import { BaseService } from '@core/base.service';
-import { BillingRepository } from './billing.repository';
 import { eventBus, EVENTS } from '@infra/events';
 import { prisma } from '@infra/db';
-import { ListBillingHistoryQuery } from './billing.schema';
+import { razorpay } from '@infra/razorpay';
+import { config } from '@infra/config';
 import { logger } from '@infra/logger';
+import {
+  ListBillingHistoryQuery,
+  CreateSubscriptionInput,
+  VerifyPaymentInput,
+  CancelSubscriptionInput,
+  RAZORPAY_PLAN_IDS,
+} from './billing.schema';
+import { AppError } from '@core/errors';
 
 const log = logger.child('BillingService');
 
-export class BillingService extends BaseService {
-  private billingRepo: BillingRepository;
+// Razorpay webhook payload types (not shipped in the SDK)
+interface RazorpaySubscriptionEntity {
+  id: string;
+  plan_id: string;
+  status: string;
+  current_end?: number;
+  current_start?: number;
+}
 
+interface RazorpayPaymentEntity {
+  id: string;
+  amount: number;
+  currency: string;
+  subscription_id?: string;
+}
+
+interface RazorpayWebhookEvent {
+  event: string;
+  payload: {
+    subscription?: { entity: RazorpaySubscriptionEntity };
+    payment?: { entity: RazorpayPaymentEntity };
+  };
+}
+
+export class BillingService extends BaseService {
   constructor() {
     super();
-    this.billingRepo = new BillingRepository();
   }
 
   async getSubscriptionStatus(workspaceId: string) {
     try {
-      return await this.billingRepo.getSubscriptionStatus(workspaceId);
+      return await (prisma.workspace as any).findUnique({
+        where: { id: workspaceId },
+        select: {
+          subscriptionPlan: true,
+          subscriptionStatus: true,
+          subscriptionPeriodEnd: true,
+          razorpayCustomerId: true,
+          razorpaySubscriptionId: true,
+          seatLimit: true,
+        },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to get subscription status');
     }
@@ -25,9 +65,11 @@ export class BillingService extends BaseService {
 
   async listHistory(workspaceId: string, query: ListBillingHistoryQuery) {
     try {
-      return await this.billingRepo.findByWorkspace(workspaceId, {
+      return await this.paginate(prisma.billingTransaction, {
         page: query.page,
         limit: query.limit,
+      }, {
+        where: { workspaceId },
       });
     } catch (error) {
       this.handleError(error, 'Failed to list billing history');
@@ -35,83 +77,291 @@ export class BillingService extends BaseService {
   }
 
   /**
-   * Handle Stripe webhook events.
-   * In production, verify the webhook signature with Stripe SDK.
+   * Creates a Razorpay subscription for the given plan.
+   * Returns subscription_id and key_id for the frontend to open the checkout modal.
    */
-  async handleStripeWebhook(event: any) {
+  async createSubscription(workspaceId: string, input: CreateSubscriptionInput) {
     try {
-      log.info(`Processing Stripe event: ${event.type}`);
+      const workspace = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { id: true },
+      });
 
-      switch (event.type) {
-        case 'checkout.session.completed': {
-          // Handle new subscription
+      if (!workspace) {
+        throw new AppError('Workspace not found', 404);
+      }
+
+      const planId = RAZORPAY_PLAN_IDS[input.plan];
+      if (!planId) {
+        throw new AppError(
+          `Razorpay plan ID not configured for plan: ${input.plan}`,
+          500,
+        );
+      }
+
+      const subscription = await razorpay.subscriptions.create({
+        plan_id: planId,
+        customer_notify: 1,
+        total_count: 12,
+        quantity: 1,
+      });
+
+      // Persist subscription ID so webhooks can resolve the workspace
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (prisma.workspace as any).update({
+        where: { id: workspaceId },
+        data: {
+          razorpaySubscriptionId: subscription.id,
+          subscriptionStatus: 'INCOMPLETE',
+        },
+      });
+
+      log.info(`Razorpay subscription created for workspace ${workspaceId}: ${subscription.id}`);
+
+      return {
+        subscriptionId: subscription.id,
+        keyId: config.RAZORPAY_KEY_ID,
+      };
+    } catch (error) {
+      this.handleError(error, 'Failed to create subscription');
+    }
+  }
+
+  /**
+   * Verifies the HMAC SHA256 signature sent by Razorpay after checkout.
+   * Signature = HMAC_SHA256(payment_id + "|" + subscription_id, key_secret)
+   */
+  async verifyPayment(workspaceId: string, input: VerifyPaymentInput) {
+    try {
+      const { razorpay_payment_id, razorpay_subscription_id, razorpay_signature } = input;
+
+      const expectedSignature = crypto
+        .createHmac('sha256', config.RAZORPAY_KEY_SECRET || '')
+        .update(`${razorpay_payment_id}|${razorpay_subscription_id}`)
+        .digest('hex');
+
+      if (expectedSignature !== razorpay_signature) {
+        throw new AppError('Invalid payment signature', 400);
+      }
+
+      const rzpSubscription = await razorpay.subscriptions.fetch(razorpay_subscription_id);
+      const rzpPayment = await razorpay.payments.fetch(razorpay_payment_id);
+
+      const plan = (
+        Object.entries(RAZORPAY_PLAN_IDS).find(([, id]) => id === rzpSubscription.plan_id)?.[0]
+      ) as 'TEAM' | 'ENTERPRISE' | undefined;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (prisma as any).$transaction([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (prisma.workspace as any).update({
+          where: { id: workspaceId },
+          data: {
+            subscriptionPlan: plan ?? 'FREE',
+            subscriptionStatus: 'ACTIVE',
+            subscriptionPeriodEnd: rzpSubscription.current_end
+              ? new Date((rzpSubscription.current_end as number) * 1000)
+              : null,
+          },
+        }),
+        prisma.billingTransaction.create({
+          data: {
+            workspaceId,
+            amount: rzpPayment.amount as number,
+            currency: rzpPayment.currency as string,
+            description: `Subscription payment - ${plan ?? 'UNKNOWN'}`,
+            status: 'paid',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ...(({ razorpayPaymentId: razorpay_payment_id }) as any),
+            planSnapshot: plan,
+          },
+        }),
+      ]);
+
+      eventBus.emit(
+        EVENTS.SUBSCRIPTION_CHANGED,
+        { workspaceId, plan, status: 'ACTIVE' },
+        undefined,
+        workspaceId,
+      );
+
+      log.info(`Payment verified for workspace ${workspaceId}: ${razorpay_payment_id}`);
+      return { verified: true };
+    } catch (error) {
+      this.handleError(error, 'Failed to verify payment');
+    }
+  }
+
+  /**
+   * Cancels the active Razorpay subscription.
+   * cancelAtPeriodEnd=true keeps access until the billing period ends.
+   */
+  async cancelSubscription(workspaceId: string, input: CancelSubscriptionInput) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const workspace = await (prisma.workspace as any).findUnique({
+        where: { id: workspaceId },
+        select: { razorpaySubscriptionId: true },
+      });
+
+      if (!workspace?.razorpaySubscriptionId) {
+        throw new AppError('No active subscription found', 404);
+      }
+
+      await razorpay.subscriptions.cancel(workspace.razorpaySubscriptionId, input.cancelAtPeriodEnd);
+
+      if (!input.cancelAtPeriodEnd) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (prisma.workspace as any).update({
+          where: { id: workspaceId },
+          data: {
+            subscriptionStatus: 'CANCELED',
+            subscriptionPlan: 'FREE',
+            razorpaySubscriptionId: null,
+          },
+        });
+      }
+      // If cancelAtPeriodEnd, the webhook subscription.completed will finalise it
+
+      log.info(`Subscription cancellation requested for workspace ${workspaceId}`);
+      return { cancelled: true, cancelAtPeriodEnd: input.cancelAtPeriodEnd };
+    } catch (error) {
+      this.handleError(error, 'Failed to cancel subscription');
+    }
+  }
+
+  /**
+   * Processes inbound Razorpay webhook events.
+   * Signature verification is done in the controller before this is called.
+   */
+  async handleRazorpayWebhook(event: RazorpayWebhookEvent) {
+    try {
+      log.info(`Processing Razorpay event: ${event.event}`);
+
+      switch (event.event) {
+        case 'subscription.activated': {
+          const sub = event.payload.subscription?.entity;
+          if (!sub) break;
+          const ws = await (prisma.workspace as any).findFirst({
+            where: { razorpaySubscriptionId: sub.id },
+          });
+          if (!ws) break;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (prisma.workspace as any).update({
+            where: { id: ws.id },
+            data: {
+              subscriptionStatus: 'ACTIVE',
+              subscriptionPeriodEnd: sub.current_end
+                ? new Date(sub.current_end * 1000)
+                : null,
+            },
+          });
           break;
         }
-        case 'invoice.paid': {
-          const invoice = event.data.object;
-          const workspace = await prisma.workspace.findFirst({
-            where: { stripeCustomerId: invoice.customer },
+
+        case 'subscription.charged': {
+          const payment = event.payload.payment?.entity;
+          const sub = event.payload.subscription?.entity;
+          if (!payment || !sub) break;
+          const ws = await (prisma.workspace as any).findFirst({
+            where: { razorpaySubscriptionId: sub.id },
           });
-          if (workspace) {
-            await prisma.billingTransaction.create({
+          if (!ws) break;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (prisma as any).$transaction([
+            prisma.billingTransaction.create({
               data: {
-                workspaceId: workspace.id,
-                amount: invoice.amount_paid,
-                currency: invoice.currency,
-                description: `Invoice ${invoice.number}`,
+                workspaceId: ws.id,
+                amount: payment.amount,
+                currency: payment.currency,
+                description: 'Recurring subscription payment',
                 status: 'paid',
-                stripeChargeId: invoice.charge,
-                planSnapshot: workspace.subscriptionPlan,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ...({ razorpayPaymentId: payment.id } as any),
+                planSnapshot: ws.subscriptionPlan,
               },
-            });
-          }
-          break;
-        }
-        case 'customer.subscription.updated': {
-          const subscription = event.data.object;
-          const workspace = await prisma.workspace.findFirst({
-            where: { stripeSubscriptionId: subscription.id },
-          });
-          if (workspace) {
-            await prisma.workspace.update({
-              where: { id: workspace.id },
-              data: {
-                subscriptionStatus: subscription.status === 'active' ? 'ACTIVE' : 'PAST_DUE',
-                subscriptionPeriodEnd: new Date(subscription.current_period_end * 1000),
-              },
-            });
-            eventBus.emit(
-              EVENTS.SUBSCRIPTION_CHANGED,
-              {
-                workspaceId: workspace.id,
-                plan: workspace.subscriptionPlan,
-                status: subscription.status,
-              },
-              undefined,
-              workspace.id,
-            );
-          }
-          break;
-        }
-        case 'customer.subscription.deleted': {
-          const sub = event.data.object;
-          const ws = await prisma.workspace.findFirst({
-            where: { stripeSubscriptionId: sub.id },
-          });
-          if (ws) {
-            await prisma.workspace.update({
+            }),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (prisma.workspace as any).update({
               where: { id: ws.id },
               data: {
-                subscriptionStatus: 'CANCELED',
-                subscriptionPlan: 'FREE',
+                subscriptionStatus: 'ACTIVE',
+                subscriptionPeriodEnd: sub.current_end
+                  ? new Date(sub.current_end * 1000)
+                  : null,
               },
-            });
-          }
+            }),
+          ]);
           break;
         }
+
+        case 'subscription.updated': {
+          const sub = event.payload.subscription?.entity;
+          if (!sub) break;
+          const ws = await (prisma.workspace as any).findFirst({
+            where: { razorpaySubscriptionId: sub.id },
+          });
+          if (!ws) break;
+          const status = sub.status === 'active' ? 'ACTIVE' : 'PAST_DUE';
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (prisma.workspace as any).update({
+            where: { id: ws.id },
+            data: {
+              subscriptionStatus: status,
+              subscriptionPeriodEnd: sub.current_end
+                ? new Date(sub.current_end * 1000)
+                : null,
+            },
+          });
+          eventBus.emit(
+            EVENTS.SUBSCRIPTION_CHANGED,
+            { workspaceId: ws.id, plan: ws.subscriptionPlan, status },
+            undefined,
+            ws.id,
+          );
+          break;
+        }
+
+        case 'subscription.completed':
+        case 'subscription.cancelled': {
+          const sub = event.payload.subscription?.entity;
+          if (!sub) break;
+          const ws = await (prisma.workspace as any).findFirst({
+            where: { razorpaySubscriptionId: sub.id },
+          });
+          if (!ws) break;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (prisma.workspace as any).update({
+            where: { id: ws.id },
+            data: {
+              subscriptionStatus: 'CANCELED',
+              subscriptionPlan: 'FREE',
+              razorpaySubscriptionId: null,
+            },
+          });
+          break;
+        }
+
+        case 'payment.failed': {
+          const payment = event.payload.payment?.entity;
+          if (!payment?.subscription_id) break;
+          const ws = await (prisma.workspace as any).findFirst({
+            where: { razorpaySubscriptionId: payment.subscription_id },
+          });
+          if (!ws) break;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (prisma.workspace as any).update({
+            where: { id: ws.id },
+            data: { subscriptionStatus: 'PAST_DUE' },
+          });
+          break;
+        }
+
+        default:
+          log.debug(`Unhandled Razorpay event: ${event.event}`);
       }
     } catch (error) {
-      log.error('Stripe webhook processing error:', error);
+      log.error('Razorpay webhook processing error:', error);
       throw error;
     }
   }

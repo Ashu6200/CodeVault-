@@ -1,24 +1,23 @@
 import { BaseService } from '@core/base.service';
-import { NotificationRepository } from './notification.repository';
+import { prisma } from '@infra/db';
 import { ListNotificationsQuery } from './notification.schema';
 
 export class NotificationService extends BaseService {
-  private notifRepo: NotificationRepository;
-
   constructor() {
     super();
-    this.notifRepo = new NotificationRepository();
   }
 
   async listNotifications(userId: string, query: ListNotificationsQuery) {
     try {
-      return await this.notifRepo.findByUser(
-        userId,
+      const isRead = query.isRead === 'true' ? true : query.isRead === 'false' ? false : undefined;
+      const where: any = { userId };
+      if (isRead !== undefined) where.isRead = isRead;
+      if (query.workspaceId) where.workspaceId = query.workspaceId;
+
+      return await this.paginate(
+        prisma.notification,
         { page: query.page, limit: query.limit },
-        {
-          isRead: query.isRead === 'true' ? true : query.isRead === 'false' ? false : undefined,
-          workspaceId: query.workspaceId,
-        },
+        { where },
       );
     } catch (error) {
       this.handleError(error, 'Failed to list notifications');
@@ -27,7 +26,10 @@ export class NotificationService extends BaseService {
 
   async markAsRead(ids: string[], userId: string) {
     try {
-      return await this.notifRepo.markAsRead(ids, userId);
+      return await prisma.notification.updateMany({
+        where: { id: { in: ids }, userId },
+        data: { isRead: true, readAt: new Date() },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to mark notifications as read');
     }
@@ -35,7 +37,13 @@ export class NotificationService extends BaseService {
 
   async markAllAsRead(userId: string, workspaceId?: string) {
     try {
-      return await this.notifRepo.markAllAsRead(userId, workspaceId);
+      const where: any = { userId, isRead: false };
+      if (workspaceId) where.workspaceId = workspaceId;
+
+      return await prisma.notification.updateMany({
+        where,
+        data: { isRead: true, readAt: new Date() },
+      });
     } catch (error) {
       this.handleError(error, 'Failed to mark all as read');
     }
@@ -43,9 +51,10 @@ export class NotificationService extends BaseService {
 
   async getUnreadCount(userId: string) {
     try {
-      return await this.notifRepo.getUnreadCount(userId);
+      return await prisma.notification.count({ where: { userId, isRead: false } });
     } catch (error) {
       this.handleError(error, 'Failed to get unread count');
     }
   }
 }
+

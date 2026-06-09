@@ -6,19 +6,9 @@
     "auditLog": "D:\\Project\\CodeVault2.0\\server\\logs\\.f18927886d1fbddb12fe5ba1148529e3e677d523-audit.json",
     "files": [
         {
-            "date": 1777496589258,
-            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\app-2026-04-30.log",
-            "hash": "091618d8d64c95283af2a142d0079b15ac734167185c597aa4c6bb40b1e31a9f"
-        },
-        {
-            "date": 1777573801641,
-            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\app-2026-05-01.log",
-            "hash": "22ec8cb8b10c90ec2a26c35cb98455cbbfa271bdad551c76cf33d25c18530b44"
-        },
-        {
-            "date": 1777662442268,
-            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\app-2026-05-02.log",
-            "hash": "0f01f1e46a0105a4b279b1ecc3f4bdcc6e94a8386a0c86effa7847f79bba42f8"
+            "date": 1780941995142,
+            "name": "D:\\Project\\CodeVault2.0\\server\\logs\\app-2026-06-08.log",
+            "hash": "49df0177ca61e050614180f232ef9c449547063b742ed485d436e16b30f3b48e"
         }
     ],
     "hashType": "sha256"

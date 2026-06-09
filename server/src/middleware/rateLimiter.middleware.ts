@@ -29,7 +29,7 @@ export const rateLimiter = (options: RateLimitOptions) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       // Build identifier
-      const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
+      const ip = req.ip || 'unknown';
 
       // Bypass configured IPs
       if (BYPASS_IPS.includes(ip)) return next();
@@ -87,7 +87,7 @@ export const globalRateLimiter = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const ip = (req.headers['x-forwarded-for'] as string) || req.ip || 'unknown';
+    const ip = req.ip || 'unknown';
 
     if (BYPASS_IPS.includes(ip)) return next();
 

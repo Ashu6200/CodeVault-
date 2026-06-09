@@ -3,7 +3,7 @@ node_modules
 /generated/prisma
 dist
 
-.env*
+.env
 
 # vercel
 .vercel

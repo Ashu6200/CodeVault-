@@ -6,7 +6,6 @@ import { resolveWorkspace, requirePermission } from '@middleware/rbac.middleware
 const router = Router({ mergeParams: true });
 const controller = new BillingController();
 
-// Workspace-scoped billing routes — all require auth
 router.use(requireAuth, resolveWorkspace);
 
 router.get('/subscription', requirePermission('billing:read'), controller.getSubscription);

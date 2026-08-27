@@ -31,10 +31,6 @@ export class BillingController extends BaseController {
     this.sendPaginated(res, result!);
   });
 
-  /**
-   * POST /api/workspaces/:workspaceId/billing/create-subscription
-   * Creates a Razorpay subscription and returns subscription_id to the frontend.
-   */
   public createSubscription = this.catchAsync(async (req: Request, res: Response) => {
     const input = createSubscriptionSchema.parse(req.body);
     const result = await this.billingService.createSubscription(
@@ -44,10 +40,7 @@ export class BillingController extends BaseController {
     this.sendSuccess(res, result, 201);
   });
 
-  /**
-   * POST /api/workspaces/:workspaceId/billing/verify-payment
-   * Verifies the Razorpay payment signature after the user completes checkout.
-   */
+
   public verifyPayment = this.catchAsync(async (req: Request, res: Response) => {
     const input = verifyPaymentSchema.parse(req.body);
     const result = await this.billingService.verifyPayment(
@@ -57,9 +50,6 @@ export class BillingController extends BaseController {
     this.sendSuccess(res, result);
   });
 
-  /**
-   * POST /api/workspaces/:workspaceId/billing/cancel-subscription
-   */
   public cancelSubscription = this.catchAsync(async (req: Request, res: Response) => {
     const input = cancelSubscriptionSchema.parse(req.body);
     const result = await this.billingService.cancelSubscription(
@@ -69,13 +59,6 @@ export class BillingController extends BaseController {
     this.sendSuccess(res, result);
   });
 
-  /**
-   * POST /api/billing/razorpay-webhook
-   * Receives Razorpay webhook events. Registered in app.ts BEFORE express.json()
-   * so req.body is the raw Buffer needed for HMAC verification.
-   *
-   * Signature: HMAC_SHA256(raw_body, webhook_secret) === x-razorpay-signature header
-   */
   public razorpayWebhook = this.catchAsync(async (req: Request, res: Response) => {
     const signature = req.headers['x-razorpay-signature'] as string;
 

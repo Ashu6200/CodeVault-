@@ -6,9 +6,19 @@ import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
-import { useEffect, useCallback } from 'react';
+import Highlight from '@tiptap/extension-highlight';
+import TextAlign from '@tiptap/extension-text-align';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import { Table } from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
+import { useEffect } from 'react';
 import { Toolbar } from './Toolbar';
 import { useSocket } from '@/lib/socket';
+import Tabs from '../extensions/Tabs';
+import Tab from '../extensions/Tab';
 
 interface EditorProps {
   documentId: string;
@@ -27,14 +37,31 @@ export function Editor({ documentId, initialContent, onSave }: EditorProps) {
         openOnClick: false,
       }),
       Image,
+      Highlight,
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Tabs,
+      Tab,
       Placeholder.configure({
         placeholder: 'Start typing or type "/" for commands...',
+        includeChildren: true,
       }),
     ],
     content: initialContent,
     onUpdate: ({ editor }) => {
       const json = editor.getJSON();
-      
+
       // Realtime emit
       if (socket) {
         socket.emit('document:update', {
@@ -60,7 +87,7 @@ export function Editor({ documentId, initialContent, onSave }: EditorProps) {
         // In a full production app, you'd use Yjs for CRDT-based collaboration
         const currentContent = JSON.stringify(editor.getJSON());
         const newContent = JSON.stringify(data.content);
-        
+
         if (currentContent !== newContent) {
           editor.commands.setContent(data.content, { emitUpdate: false });
         }

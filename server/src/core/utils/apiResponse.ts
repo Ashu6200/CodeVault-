@@ -29,6 +29,7 @@ export const apiResponse = (
       url: req.originalUrl,
       query: req.query,
       params: req.params,
+      body: req.body
     };
   }
 

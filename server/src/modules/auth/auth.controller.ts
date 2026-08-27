@@ -3,12 +3,6 @@ import { BaseController } from '@core/base.controller';
 import { AuthService } from './auth.service';
 import { auth } from '@infra/auth';
 
-// ─────────────────────────────────────────────
-// Auth Controller
-// HTTP-only layer — delegates to Better Auth
-// handler for standard flows, and to AuthService
-// for custom operations.
-// ─────────────────────────────────────────────
 
 export class AuthController extends BaseController {
   private authService: AuthService;

@@ -2,14 +2,10 @@ import Redis from 'ioredis';
 import { config } from '@infra/config';
 import { logger } from '@infra/logger';
 
-// ─────────────────────────────────────────────
-// Redis Client
-// ─────────────────────────────────────────────
-
 const log = logger.child('Redis');
 
 export const redis = new Redis(config.REDIS_URL, {
-  maxRetriesPerRequest: null, // Required by BullMQ
+  maxRetriesPerRequest: 4,
   enableReadyCheck: false,
 });
 

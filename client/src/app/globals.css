@@ -165,3 +165,294 @@
 .animate-pulse-slow {
   animation: pulse-slow 15s ease-in-out infinite;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Tiptap Editor Styles
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Tab Visibility (class-based — supports unlimited tabs) ──────────────────── */
+
+.tiptap-tab {
+  display: none;
+}
+
+.tiptap-tab.active-tab {
+  display: block;
+}
+
+/* ── Tabs Wrapper ────────────────────────────────────────────────────────────── */
+
+.tiptap-tabs-wrapper {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 1rem 0;
+  overflow: hidden;
+  background: var(--card);
+}
+
+/* ── Tab Bar ─────────────────────────────────────────────────────────────────── */
+
+.tiptap-tabs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--muted);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+/* ── Tab Button ──────────────────────────────────────────────────────────────── */
+
+.tiptap-tabs-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: calc(var(--radius) * 0.6);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.tiptap-tabs-button:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.tiptap-tabs-button.active {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Tab Title ───────────────────────────────────────────────────────────────── */
+
+.tiptap-tabs-title {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Tab Icon Buttons (edit / delete) ────────────────────────────────────────── */
+
+.tiptap-tabs-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.tiptap-tabs-button:hover .tiptap-tabs-icon-btn,
+.tiptap-tabs-button.active .tiptap-tabs-icon-btn {
+  opacity: 0.6;
+}
+
+.tiptap-tabs-icon-btn:hover {
+  opacity: 1 !important;
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.tiptap-tabs-delete-btn:hover {
+  color: var(--destructive) !important;
+}
+
+/* ── Add Tab Button ──────────────────────────────────────────────────────────── */
+
+.tiptap-tabs-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: calc(var(--radius) * 0.6);
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.tiptap-tabs-add-btn:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--accent-foreground);
+}
+
+/* ── Rename Input ────────────────────────────────────────────────────────────── */
+
+.tiptap-tabs-rename-input {
+  width: 100px;
+  padding: 1px 4px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border: 1px solid var(--ring);
+  border-radius: 3px;
+  background: var(--background);
+  color: var(--foreground);
+  outline: none;
+  line-height: 1.4;
+}
+
+.tiptap-tabs-rename-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+/* ── Tab Content Area ────────────────────────────────────────────────────────── */
+
+.tiptap-tabs-content {
+  padding: 12px 16px;
+  min-height: 80px;
+}
+
+.tiptap-tabs-content-inner {
+  outline: none;
+}
+
+/* ── Tiptap Table Styles ─────────────────────────────────────────────────────── */
+
+.tiptap table {
+  border-collapse: collapse;
+  margin: 1rem 0;
+  overflow: hidden;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.tiptap td,
+.tiptap th {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  vertical-align: top;
+  position: relative;
+  min-width: 60px;
+}
+
+.tiptap th {
+  background: var(--muted);
+  font-weight: 600;
+}
+
+.tiptap td > *,
+.tiptap th > * {
+  margin: 0;
+}
+
+.tiptap .selectedCell::after {
+  background: var(--primary);
+  opacity: 0.08;
+  content: '';
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.tiptap .column-resize-handle {
+  background-color: var(--primary);
+  bottom: -2px;
+  pointer-events: none;
+  position: absolute;
+  right: -2px;
+  top: 0;
+  width: 4px;
+}
+
+/* ── Task List Styles ────────────────────────────────────────────────────────── */
+
+.tiptap ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tiptap ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.tiptap ul[data-type='taskList'] li > label {
+  flex-shrink: 0;
+  margin-top: 0.25rem;
+}
+
+.tiptap ul[data-type='taskList'] li > label input[type='checkbox'] {
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.tiptap ul[data-type='taskList'] li > div {
+  flex: 1;
+}
+
+/* ── Placeholder inside tabs ─────────────────────────────────────────────────── */
+
+.tiptap p.is-editor-empty:first-child::before,
+.tiptap .tiptap-tab p.is-empty:first-child::before {
+  color: var(--muted-foreground);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ── Dark mode refinements ───────────────────────────────────────────────────── */
+
+.dark .tiptap-tabs-wrapper {
+  border-color: oklch(1 0 0 / 10%);
+}
+
+.dark .tiptap-tabs-bar {
+  background: oklch(0.18 0 0);
+  border-color: oklch(1 0 0 / 10%);
+}
+
+.dark .tiptap-tabs-button.active {
+  background: oklch(0.14 0 0);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dark .tiptap-tabs-add-btn {
+  border-color: oklch(1 0 0 / 15%);
+}
+
+.dark .tiptap-tabs-add-btn:hover {
+  background: oklch(0.22 0 0);
+}
+
+.dark .tiptap-tabs-rename-input {
+  background: oklch(0.14 0 0);
+  border-color: oklch(1 0 0 / 20%);
+}
+
+.dark .tiptap table td,
+.dark .tiptap table th {
+  border-color: oklch(1 0 0 / 10%);
+}
+
+.dark .tiptap table th {
+  background: oklch(0.18 0 0);
+}

@@ -1,7 +1,0 @@
-node_modules
-dist
-coverage
-.env
-*.log
-package-lock.json
-prisma/migrations

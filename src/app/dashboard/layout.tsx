@@ -8,7 +8,6 @@ export default function DashboardLayout({
 }) {
   return (
     <AppLayout>
-      {/* Razorpay checkout SDK — loaded lazily, only when checkout is triggered */}
       <Script
         src="https://checkout.razorpay.com/v1/checkout.js"
         strategy="lazyOnload"

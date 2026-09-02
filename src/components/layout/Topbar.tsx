@@ -15,7 +15,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 
 export function Topbar() {
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-background/80 backdrop-blur-md px-4 lg:px-6">
+    <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-graphite bg-void px-4 lg:px-6">
       <SidebarTrigger className="-ml-1" />
       <div className="w-full flex-1 md:flex md:justify-center">
         <button 
@@ -28,18 +28,18 @@ export function Topbar() {
             });
             document.dispatchEvent(event);
           }}
-          className="relative flex w-full max-w-sm items-center gap-2 rounded-md border bg-muted/30 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 transition-colors border-border/50"
+          className="relative flex w-full max-w-sm items-center gap-2 rounded-md border border-graphite bg-transparent px-3 py-1.5 text-sm text-ash-gray hover:border-iron transition-colors duration-150"
         >
           <Search className="h-4 w-4" />
-          <span className="flex-1 text-left">Search documentation...</span>
-          <div className="flex items-center gap-1 rounded border bg-background px-1.5 py-0.5 font-mono text-[10px] font-medium">
+          <span className="flex-1 text-left font-mono text-[13px]">Search documentation...</span>
+          <div className="flex items-center gap-1 rounded border border-graphite bg-void px-1.5 py-0.5 font-mono text-[10px] font-medium text-ash-gray">
             <span className="text-xs">⌘</span>K
           </div>
         </button>
       </div>
       <Button variant="ghost" size="icon" className="relative">
         <Bell className="h-5 w-5" />
-        <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-600"></span>
+        <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-pulse-green"></span>
         <span className="sr-only">Notifications</span>
       </Button>
       <DropdownMenu>
@@ -50,7 +50,7 @@ export function Topbar() {
         >
           <Avatar className="h-8 w-8">
             <AvatarImage src="" alt="User" />
-            <AvatarFallback>U</AvatarFallback>
+            <AvatarFallback className="bg-iris-violet/15 text-iris-violet text-xs font-bold">U</AvatarFallback>
           </Avatar>
           <span className="sr-only">Toggle user menu</span>
         </DropdownMenuTrigger>

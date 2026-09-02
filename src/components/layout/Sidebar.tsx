@@ -99,7 +99,7 @@ function NavItem({ item }: { item: SidebarItemProps }) {
             </div>
             {item.children?.map((child) => (
               <DropdownMenuItem key={child.name} render={<Link href={child.href} />}>
-                <span className={cn(pathname === child.href && "text-primary font-medium")}>
+                <span className={cn(pathname === child.href && "text-iris-violet font-medium")}>
                   {child.name}
                 </span>
               </DropdownMenuItem>
@@ -155,20 +155,20 @@ function NavItem({ item }: { item: SidebarItemProps }) {
 export function Sidebar() {
   return (
     <ShadcnSidebar collapsible="icon">
-      <SidebarHeader className="border-b h-14 flex items-center px-4">
-        <Link href="/" className="flex items-center gap-3 font-bold tracking-tight px-2">
-          <div className="h-6 w-6 shrink-0 rounded bg-primary flex items-center justify-center text-primary-foreground text-[10px]">
+      <SidebarHeader className="border-b border-graphite h-14 flex items-center px-4">
+        <Link href="/" className="flex items-center gap-3 font-semibold tracking-tight px-2">
+          <div className="h-6 w-6 shrink-0 rounded-md bg-iris-violet flex items-center justify-center text-white text-[10px] font-bold">
             CV
           </div>
-          <span className="text-sm truncate group-data-[collapsible=icon]:hidden">CodeVault</span>
+          <span className="text-sm text-white truncate group-data-[collapsible=icon]:hidden">CodeVault</span>
         </Link>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="px-4">
+          <SidebarGroupLabel className="px-4 text-ash-gray">
             <span>Workspace</span>
-            <button className="ml-auto p-1 hover:bg-sidebar-accent rounded text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
+            <button className="ml-auto p-1 hover:bg-graphite rounded text-ash-gray hover:text-white transition-colors duration-150 group-data-[collapsible=icon]:hidden">
               <Plus className="h-3.5 w-3.5" />
             </button>
           </SidebarGroupLabel>
@@ -182,14 +182,14 @@ export function Sidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t bg-muted/20">
+      <SidebarFooter className="p-4 border-t border-graphite">
         <div className="flex items-center gap-3 px-1">
-          <div className="h-8 w-8 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+          <div className="h-8 w-8 shrink-0 rounded-full bg-iris-violet/15 flex items-center justify-center text-iris-violet font-bold text-xs">
             JD
           </div>
           <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-            <p className="text-xs font-medium truncate">John Doe</p>
-            <p className="text-[10px] text-muted-foreground truncate">john@example.com</p>
+            <p className="text-xs font-medium text-bone-white truncate">John Doe</p>
+            <p className="text-[10px] text-iris-violet font-mono truncate">john@example.com</p>
           </div>
         </div>
       </SidebarFooter>

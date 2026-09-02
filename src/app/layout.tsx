@@ -1,20 +1,24 @@
-import { Inter, Geist_Mono } from "next/font/google";
+import { JetBrains_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import StoreProvider from "./StoreProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { CommandMenu } from '@/components/CommandMenu';
 import { Metadata } from 'next';
-import { BackgroundBlobs } from "@/components/ui/BackgroundBlobs";
+import { Geist } from "next/font/google";
 
-const inter = Inter({
+const geist = Geist({
   variable: "--font-inter",
   subsets: ["latin"],
 });
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
 });
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+});
+
 
 export const metadata: Metadata = {
   title: "CodeVault 2.0",
@@ -29,18 +33,17 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geist.variable} ${jetbrainsMono.variable} ${playfair.variable} dark h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-background text-foreground font-sans" suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="dark"
+          forcedTheme="dark"
           disableTransitionOnChange
         >
           <StoreProvider>
-            <BackgroundBlobs />
             {children}
             <CommandMenu />
           </StoreProvider>
@@ -49,3 +52,4 @@ export default function RootLayout({
     </html>
   );
 }
+

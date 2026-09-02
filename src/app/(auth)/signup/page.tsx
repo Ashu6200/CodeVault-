@@ -66,7 +66,7 @@ export default function SignupPage() {
     >
       <div className="flex flex-col items-center mb-8">
         <Link href="/" className="flex items-center gap-2 font-bold text-2xl tracking-tighter mb-2">
-          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
+          <div className="h-10 w-10 rounded-md bg-iris-violet flex items-center justify-center text-white font-bold">
             C
           </div>
           CodeVault
@@ -74,7 +74,7 @@ export default function SignupPage() {
         <p className="text-muted-foreground text-center">Create your account to get started.</p>
       </div>
 
-      <Card className="border-none shadow-2xl bg-card/50 backdrop-blur-sm">
+      <Card className="border-graphite bg-void">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>
@@ -84,7 +84,7 @@ export default function SignupPage() {
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             {error && (
-              <div className="p-3 text-sm font-medium text-destructive bg-destructive/10 rounded-lg border border-destructive/20">
+              <div className="p-3 text-sm font-medium text-alarm-red bg-alarm-red/10 rounded-md border border-alarm-red/20">
                 {error}
               </div>
             )}
@@ -95,7 +95,7 @@ export default function SignupPage() {
                 <Input
                   id="name"
                   placeholder="John Doe"
-                  className="pl-10 h-12 rounded-lg"
+                  className="pl-10 h-11 rounded-md"
                   {...register("name")}
                 />
               </div>
@@ -111,7 +111,7 @@ export default function SignupPage() {
                   id="email"
                   placeholder="name@example.com"
                   type="email"
-                  className="pl-10 h-12 rounded-lg"
+                  className="pl-10 h-11 rounded-md"
                   {...register("email")}
                 />
               </div>
@@ -127,7 +127,7 @@ export default function SignupPage() {
                   id="password"
                   type="password"
                   placeholder="••••••••"
-                  className="pl-10 h-12 rounded-lg"
+                  className="pl-10 h-11 rounded-md"
                   {...register("password")}
                 />
               </div>
@@ -135,7 +135,7 @@ export default function SignupPage() {
                 <p className="text-xs text-destructive mt-1">{errors.password.message}</p>
               )}
             </div>
-            <Button type="submit" className="w-full h-12 rounded-lg font-semibold text-base shadow-xl shadow-primary/20" disabled={loading}>
+            <Button type="submit" className="w-full h-11 rounded-md font-medium text-sm" disabled={loading}>
               {loading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -159,16 +159,16 @@ export default function SignupPage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Button variant="outline" className="h-11 rounded-lg" disabled={loading}>
+            <Button variant="outline" className="h-11 rounded-md" disabled={loading}>
               Github
             </Button>
-            <Button variant="outline" className="h-11 rounded-lg" disabled={loading}>
+            <Button variant="outline" className="h-11 rounded-md" disabled={loading}>
               Google
             </Button>
           </div>
           <p className="text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/login" className="font-semibold text-primary hover:underline">
+            <Link href="/login" className="font-medium text-bone-white hover:underline">
               Sign in
             </Link>
           </p>
